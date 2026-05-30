@@ -1,13 +1,12 @@
-import "./globals.css";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Shopping Search Agent v2",
-  description: "Conversational semantic search MVP"
+  title: "V2C AI Guided Commerce",
+  description: "AI shopping decision layer with guided narrowing and clean search flow"
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant">
       <body>{children}</body>

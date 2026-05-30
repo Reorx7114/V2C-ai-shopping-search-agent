@@ -1,77 +1,183 @@
-export const INTENT_MODES = ["找商品", "找旅遊", "找靈感", "我不確定"] as const;
+export type ResponseMode = "narrowing" | "results" | "blocked";
+export type Stage = "narrowing" | "search";
+export type OptionId = "A" | "B" | "C" | "D";
 
-export type IntentMode = (typeof INTENT_MODES)[number];
-export type ParserSource = "openai" | "fallback";
-export type SearchSource = "serpapi" | "mock" | "none";
+export type RecipientGender = "male" | "female" | "neutral" | "unknown";
+export type RecipientAgeGroup = "adult" | "teenager" | "child" | "toddler" | "senior" | "unknown";
+export type Relationship =
+  | "spouse"
+  | "partner"
+  | "parent"
+  | "child"
+  | "sibling"
+  | "friend"
+  | "relative"
+  | "coworker"
+  | "supervisor"
+  | "subordinate"
+  | "client"
+  | "self"
+  | "unknown";
+export type RelationshipSubType =
+  | "father"
+  | "mother"
+  | "wife"
+  | "husband"
+  | "girlfriend"
+  | "boyfriend"
+  | "daughter"
+  | "son"
+  | "older_sister"
+  | "younger_sister"
+  | "older_brother"
+  | "younger_brother"
+  | "unknown";
+export type SocialPosition = "elder" | "supervisor" | "executive" | "peer" | "junior" | "new_acquaintance" | "unknown";
+export type Occasion = "birthday" | "anniversary" | "holiday" | "workplace_gift" | "casual_gift" | "self_use" | "unknown";
+export type Personality =
+  | "strict"
+  | "conservative"
+  | "playful"
+  | "practical"
+  | "fashionable"
+  | "low_key"
+  | "picky"
+  | "warm"
+  | "unknown";
+export type ProductCategory =
+  | "toy"
+  | "bag"
+  | "beauty"
+  | "skincare"
+  | "fragrance"
+  | "accessory"
+  | "food"
+  | "home"
+  | "tech"
+  | "unknown";
+export type EmotionalTone =
+  | "safe"
+  | "thoughtful"
+  | "cute"
+  | "warm"
+  | "elegant"
+  | "practical"
+  | "playful"
+  | "premium"
+  | "low_key"
+  | "creative"
+  | "unknown";
+
+export interface SemanticContext {
+  recipientGender: RecipientGender;
+  recipientAgeGroup: RecipientAgeGroup;
+  relationship: Relationship;
+  relationshipSubType: RelationshipSubType;
+  socialPosition: SocialPosition;
+  occasion: Occasion;
+  personality: Personality;
+  productCategory: ProductCategory;
+  negativePreferences: string[];
+  emotionalTone: EmotionalTone;
+}
 
 export interface ParsedIntent {
-  intentMode: IntentMode;
-  features: string[];
-  keywords: string[];
-  englishKeywords: string[];
-  coreClues: string[];
-  negativeTerms: string[];
-  searchQueries: string[];
+  rawNeed: string;
+  normalizedNeed: string;
+  giftIntent: boolean;
+  locale: "zh-TW";
+  parserSource: "openai" | "heuristic";
+}
+
+export interface GuidedOption {
+  id: OptionId;
+  label: string;
+  description: string;
+  reason: string;
+  searchQuery?: string;
 }
 
 export interface Candidate {
   id: string;
-  image: string;
   title: string;
   source: string;
-  link: string;
-  snippet?: string;
+  price?: string;
+  image?: string;
+  link?: string;
+  isMock?: boolean;
+  rankScore: number;
+  rankReason: string;
 }
 
-export interface SelectedCandidatePayload {
-  title: string;
-  source: string;
-  link: string;
-}
-
-export interface SearchRequest {
-  intentMode: IntentMode;
-  wanted?: string;
-  unwanted?: string;
-  query?: string;
-  negativeInput?: string;
-  selectedCandidate?: SelectedCandidatePayload;
-  refinementType?: "similar";
-  likedCandidateId?: string;
-  restartRefinement?: boolean;
-  mockMode?: boolean;
+export interface ComparisonRow {
+  item: string;
+  bestFor: string;
+  strength: string;
+  caution: string;
 }
 
 export interface SearchDebug {
-  apiKeyStatus: {
-    openaiConfigured: boolean;
-    serpApiConfigured: boolean;
-  };
-  parserSource: ParserSource;
-  searchSource: SearchSource;
-  intentMode: IntentMode;
-  generatedQueries: string[];
+  mode: ResponseMode;
+  stage: Stage;
+  semanticContext?: SemanticContext;
+  serpApiCalls: number;
+  searchProvider: "none" | "serpapi" | "local_mock" | "blocked";
+  selectedOptionId?: OptionId;
+  generatedSearchQueries: string[];
+  useSerpEnabled: boolean;
+  hasSerpApiKey: boolean;
+  parserSource?: ParsedIntent["parserSource"];
   errorMessage?: string;
+  serpRawCount: number;
+  serpMappedCount: number;
+  serpFirstRawKeys: string[];
+  serpDiscardReason: Record<string, number>;
+  firstRawResultPreview?: unknown;
+  fallbackReason?: string;
 }
 
-
-export interface BlockedSearchResponse {
-  blocked: true;
-  safetyReason: string;
-  candidates: Candidate[];
-  parsedIntent: null;
-  intentMode: IntentMode;
-  generatedQueries: string[];
-  errorMessage: string;
-  safetyStage: "pre-parse" | "post-parse" | "pre-serpapi";
-  matchedSafetyTerm?: string;
+export interface SearchRequest {
+  query: string;
+  stage?: Stage;
+  selectedOption?: GuidedOption;
+  selectedOptionId?: OptionId;
+  regenCount?: number;
 }
 
-export interface SearchResponse {
-  blocked?: false;
-  parsedIntent: ParsedIntent | null;
-  candidates: Candidate[];
-  debug: SearchDebug;
-}
+export type SearchApiResponse =
+  | {
+      mode: "narrowing";
+      opening: string;
+      parsedIntent: ParsedIntent;
+      semanticContext: SemanticContext;
+      options: GuidedOption[];
+      debug: SearchDebug;
+    }
+  | {
+      mode: "results";
+      parsedIntent: ParsedIntent;
+      semanticContext: SemanticContext;
+      candidates: Candidate[];
+      comparisonTable: ComparisonRow[];
+      comparisonSummary: string;
+      notice?: string;
+      debug: SearchDebug;
+    }
+  | {
+      mode: "blocked";
+      reason: string;
+      debug: SearchDebug;
+    };
 
-export type SearchApiResponse = SearchResponse | BlockedSearchResponse;
+export const emptySemanticContext: SemanticContext = {
+  recipientGender: "unknown",
+  recipientAgeGroup: "unknown",
+  relationship: "unknown",
+  relationshipSubType: "unknown",
+  socialPosition: "unknown",
+  occasion: "unknown",
+  personality: "unknown",
+  productCategory: "unknown",
+  negativePreferences: [],
+  emotionalTone: "unknown"
+};

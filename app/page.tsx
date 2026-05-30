@@ -1,160 +1,223 @@
 "use client";
 
-import { useState } from "react";
-import type { Candidate, IntentMode, SearchApiResponse } from "@/lib/search/types";
-import { INTENT_MODES } from "@/lib/search/types";
+import { useMemo, useState } from "react";
+import type { GuidedOption, SearchApiResponse } from "@/lib/search/types";
 
-function CandidateImage({ src, alt }: { src: string; alt: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed || !src) {
-    return <div className="h-40 w-full bg-slate-200 text-xs flex items-center justify-center">No Image</div>;
-  }
-  return <img src={src} alt={alt} className="h-40 w-full object-cover" onError={() => setFailed(true)} referrerPolicy="no-referrer" />;
-}
-
-function joinOrFallback(items: string[] | undefined, fallback = "無"): string {
-  if (!items || items.length === 0) return fallback;
-  return items.join("、");
-}
+const examples = [
+  "我想幫小朋友買玩具，小女生，不要機器人",
+  "我要買禮物給我妹妹，很久沒見了，他喜歡粉紅色的物品",
+  "我想要幫父親買個父親的禮物，但他個性很頑固，且嚴謹，我不知道買啥比較好",
+  "我想幫主管買生日禮物，但不要太商務"
+];
 
 export default function Home() {
-  const [intentMode, setIntentMode] = useState<IntentMode>("我不確定");
-  const [wanted, setWanted] = useState("");
-  const [unwanted, setUnwanted] = useState("");
-  const [result, setResult] = useState<SearchApiResponse | null>(null);
+  const [query, setQuery] = useState(examples[0]);
+  const [response, setResponse] = useState<SearchApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showDebug, setShowDebug] = useState<boolean>(false);
+  const [regenCount, setRegenCount] = useState(0);
+  const [status, setStatus] = useState("");
+  const [debugOpen, setDebugOpen] = useState(false);
 
-  const runSearch = async () => {
+  const options = response?.mode === "narrowing" ? response.options : [];
+  const debug = response?.debug;
+
+  async function callSearch(body: Record<string, unknown>) {
     setLoading(true);
     try {
-      const response = await fetch("/api/search", {
+      const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          intentMode,
-          wanted,
-          unwanted,
-          query: wanted,
-          negativeInput: unwanted
-        })
+        body: JSON.stringify(body)
       });
-      const data = (await response.json()) as SearchApiResponse;
-      setResult(data);
-      setShowDebug(false);
+      const data = (await res.json()) as SearchApiResponse;
+      setResponse(data);
+      return data;
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const refineLikeThis = async (candidate: Candidate) => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: wanted,
-          intentMode,
-          negativeInput: unwanted,
-          selectedCandidate: {
-            title: candidate.title,
-            source: candidate.source,
-            link: candidate.link
-          },
-          refinementType: "similar"
-        })
-      });
-      const data = (await response.json()) as SearchApiResponse;
-      setResult(data);
-      setShowDebug(false);
-    } finally {
-      setLoading(false);
+  async function startNarrowing(nextQuery = query) {
+    setStatus("");
+    setRegenCount(0);
+    await callSearch({ query: nextQuery, stage: "narrowing", regenCount: 0 });
+  }
+
+  async function selectOption(option: GuidedOption) {
+    if (option.id === "D") {
+      const nextRegen = regenCount + 1;
+      setRegenCount(nextRegen);
+      setStatus("已重新整理方向");
+      await callSearch({ query, stage: "narrowing", selectedOptionId: "D", selectedOption: option, regenCount: nextRegen });
+      return;
     }
-  };
+    setStatus("");
+    await callSearch({ query, stage: "search", selectedOptionId: option.id, selectedOption: option, regenCount });
+  }
+
+  const debugText = useMemo(() => (debug ? JSON.stringify(debug, null, 2) : ""), [debug]);
 
   return (
-    <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Conversational Semantic Search MVP</h1>
-      <section className="bg-white rounded-lg border p-4 space-y-3">
-        <div className="flex gap-2 flex-wrap">
-          {INTENT_MODES.map((mode) => (
-            <button key={mode} type="button" className={`px-3 py-1 rounded border ${intentMode === mode ? "bg-slate-900 text-white" : "bg-white"}`} onClick={() => setIntentMode(mode)}>
-              {mode}
-            </button>
-          ))}
-        </div>
-        <textarea className="w-full border rounded p-2" placeholder="你想找什麼？" value={wanted} onChange={(e) => setWanted(e.target.value)} />
-        <textarea className="w-full border rounded p-2" placeholder="你不想要什麼？例如 家樂福, carrefour" value={unwanted} onChange={(e) => setUnwanted(e.target.value)} />
-        <button type="button" className="px-4 py-2 bg-slate-900 text-white rounded" onClick={runSearch} disabled={loading || !wanted.trim()}>
-          {loading ? "搜尋中..." : "開始搜尋"}
-        </button>
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-8 md:px-8">
+      <section className="mb-6">
+        <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-moss">V2C Clean Build</p>
+        <h1 className="text-3xl font-semibold text-ink md:text-4xl">AI Guided Commerce</h1>
+        <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+          先理解購物語境，再用 A/B/C/D 快速收斂；只有選 A/B/C 才會進入商品搜尋。
+        </p>
       </section>
 
-      {result && (
-        <section className="space-y-4">
-          {result.blocked ? (
-            <article className="bg-white border rounded-lg p-4 space-y-2">
-              <h2 className="text-base font-semibold">安全提示</h2>
-              <p className="text-sm text-slate-700">這個需求可能涉及違法或高風險服務，因此我不能協助搜尋或提供連結。你可以改搜尋合法、安全的一般商品、旅遊、住宿或靈感內容。</p>
-              <button type="button" className="text-xs underline text-slate-500" onClick={() => setShowDebug((v) => !v)} aria-expanded={showDebug}>
-                {showDebug ? "隱藏除錯資訊" : "顯示除錯資訊"}
+      <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
+        <label htmlFor="need" className="mb-3 block text-sm font-semibold text-ink">
+          你的需求
+        </label>
+        <textarea
+          id="need"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="min-h-32 w-full resize-y rounded-lg border border-line bg-mist p-4 text-base leading-7 text-ink outline-none transition focus:border-moss focus:bg-white focus:ring-4 focus:ring-moss/10"
+          placeholder="例如：我想幫主管買生日禮物，但不要太商務"
+        />
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {examples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => {
+                  setQuery(example);
+                  setStatus("");
+                }}
+                className="rounded-full border border-line bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-moss hover:text-moss"
+              >
+                案例
               </button>
-              {showDebug ? (
-                <pre className="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-auto">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              ) : null}
-            </article>
-          ) : (
-          <article className="bg-white border rounded-lg p-4 space-y-2">
-            <h2 className="text-base font-semibold">AI 解析結果</h2>
-            <p className="text-sm"><span className="font-medium">商品特徵：</span>{joinOrFallback(result.parsedIntent?.features)}</p>
-            <p className="text-sm"><span className="font-medium">搜尋關鍵字：</span>{joinOrFallback(result.parsedIntent?.keywords)}</p>
-            <p className="text-sm"><span className="font-medium">英文搜尋詞：</span>{joinOrFallback(result.parsedIntent?.englishKeywords)}</p>
-            <p className="text-sm"><span className="font-medium">重要線索：</span>{joinOrFallback(result.parsedIntent?.coreClues)}</p>
-            <p className="text-sm"><span className="font-medium">排除條件：</span>{joinOrFallback(result.parsedIntent?.negativeTerms, "無")}</p>
-            <p className="text-sm"><span className="font-medium">搜尋查詢：</span>{joinOrFallback(result.parsedIntent?.searchQueries)}</p>
-            <p className="text-sm text-slate-600 pt-1">
-              {result.candidates.length > 0 ? "已為你找到候選商品。" : "目前沒有找到候選商品，請換個說法或放寬條件。"}
-            </p>
-            <button type="button" className="text-xs underline text-slate-500" onClick={() => setShowDebug((v) => !v)} aria-expanded={showDebug}>
-              {showDebug ? "隱藏除錯資訊" : "顯示除錯資訊"}
-            </button>
-            {showDebug ? (
-              <pre className="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-auto">
-                {JSON.stringify({ parsedIntent: result.parsedIntent, debug: result.debug }, null, 2)}
-              </pre>
-            ) : null}
-          </article>
-          )}
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => startNarrowing()}
+            disabled={loading}
+            className="rounded-lg bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "整理中..." : "幫我整理方向"}
+          </button>
+        </div>
+      </section>
 
-          {result.blocked || result.candidates.length === 0 ? null : (
-            <div className="grid md:grid-cols-3 gap-4">
-              {result.candidates.map((candidate) => (
-                <article key={candidate.id} className="bg-white border rounded overflow-hidden">
-                  <CandidateImage src={candidate.image} alt={candidate.title} />
-                  <div className="p-3 space-y-2">
-                    <h2 className="font-medium text-sm">{candidate.title}</h2>
-                    <p className="text-xs text-slate-500">{candidate.source}</p>
-                    <div className="flex gap-2 text-xs">
-                      <a href={candidate.link} target="_blank" className="underline" rel="noreferrer">
+      {response?.mode === "blocked" ? (
+        <section className="mt-6 rounded-lg border border-coral/30 bg-coral/10 p-5 text-coral">{response.reason}</section>
+      ) : null}
+
+      {options.length ? (
+        <section className="mt-6">
+          <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-ink">方向收斂</h2>
+              <p className="mt-1 text-sm text-slate-600">{response?.mode === "narrowing" ? response.opening : ""}</p>
+            </div>
+            {status ? <p className="text-sm font-medium text-moss">{status}</p> : null}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {options.map((option) => (
+              <button
+                type="button"
+                key={`${option.id}-${option.label}-${regenCount}`}
+                onClick={() => selectOption(option)}
+                disabled={loading}
+                className="group flex min-h-64 flex-col rounded-lg border border-line bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-moss hover:shadow-soft disabled:cursor-wait disabled:opacity-70"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-mist text-sm font-bold text-ink group-hover:bg-moss group-hover:text-white">
+                    {option.id}
+                  </span>
+                  {option.id === "D" ? <span className="text-xs font-semibold text-coral">不搜尋</span> : <span className="text-xs font-semibold text-moss">可搜尋</span>}
+                </div>
+                <h3 className="text-lg font-semibold text-ink">{option.label}</h3>
+                <p className="mt-3 flex-1 text-sm leading-6 text-slate-600">{option.description}</p>
+                <p className="mt-4 text-sm leading-6 text-slate-500">{option.reason}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {response?.mode === "results" ? (
+        <section className="mt-8 space-y-6">
+          {response.notice ? <div className="rounded-lg border border-coral/30 bg-coral/10 p-4 text-sm font-medium text-coral">{response.notice}</div> : null}
+
+          <div>
+            <h2 className="mb-4 text-xl font-semibold text-ink">商品卡</h2>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {response.candidates.map((candidate) => (
+                <article key={candidate.id} className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+                  <div className="aspect-[4/3] bg-mist">
+                    {candidate.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={candidate.image} alt={candidate.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-slate-500">沒有圖片</div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-moss">{candidate.source}</span>
+                      {candidate.isMock ? <span className="rounded-full bg-coral/10 px-2 py-1 text-xs font-semibold text-coral">Local Mock</span> : null}
+                    </div>
+                    <h3 className="line-clamp-3 min-h-16 text-sm font-semibold leading-5 text-ink">{candidate.title}</h3>
+                    <p className="mt-3 text-sm text-slate-600">{candidate.price ?? "價格待確認"}</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{candidate.rankReason}</p>
+                    {candidate.link ? (
+                      <a href={candidate.link} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-lg border border-ink px-3 py-2 text-sm font-semibold text-ink transition hover:bg-ink hover:text-white">
                         查看連結
                       </a>
-                      <button type="button" className="underline" onClick={() => refineLikeThis(candidate)}>
-                        比較像這個
-                      </button>
-                    </div>
+                    ) : (
+                      <span className="mt-4 inline-flex rounded-lg border border-line px-3 py-2 text-sm font-semibold text-slate-400">沒有連結</span>
+                    )}
                   </div>
                 </article>
               ))}
             </div>
-          )}
-          <button type="button" className="text-sm underline" onClick={() => setResult(null)}>
-            這些都不像
-          </button>
+          </div>
+
+          <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink">比較表</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{response.comparisonSummary}</p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-line text-slate-500">
+                    <th className="py-3 pr-4">商品</th>
+                    <th className="py-3 pr-4">適合情境</th>
+                    <th className="py-3 pr-4">優點</th>
+                    <th className="py-3 pr-4">確認點</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {response.comparisonTable.map((row) => (
+                    <tr key={row.item} className="border-b border-line/70">
+                      <td className="py-3 pr-4 font-medium text-ink">{row.item}</td>
+                      <td className="py-3 pr-4 text-slate-600">{row.bestFor}</td>
+                      <td className="py-3 pr-4 text-slate-600">{row.strength}</td>
+                      <td className="py-3 pr-4 text-slate-600">{row.caution}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
-      )}
+      ) : null}
+
+      {debug ? (
+        <section className="mt-8 rounded-lg border border-line bg-white">
+          <button type="button" onClick={() => setDebugOpen((value) => !value)} className="flex w-full items-center justify-between px-5 py-4 text-left font-semibold text-ink">
+            Debug
+            <span className="text-sm text-slate-500">{debugOpen ? "收合" : "展開"}</span>
+          </button>
+          {debugOpen ? <pre className="max-h-[520px] overflow-auto border-t border-line bg-slate-950 p-5 text-xs leading-5 text-slate-100">{debugText}</pre> : null}
+        </section>
+      ) : null}
     </main>
   );
 }

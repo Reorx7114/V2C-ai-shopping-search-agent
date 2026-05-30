@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color: #1c2430;
+  background: #eef2f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900;
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 242, 247, 0.95)),
+    #eef2f7;
+}
+
+a {
+  color: inherit;
 }

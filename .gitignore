@@ -1,0 +1,12 @@
+node_modules
+.next
+.npm-cache
+_git
+HANDOFF.md
+tsconfig.tsbuildinfo
+out
+.env*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+V2C-clean-build-checkpoint.zip
