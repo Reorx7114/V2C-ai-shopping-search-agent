@@ -104,6 +104,7 @@ export interface Candidate {
   price?: string;
   image?: string;
   link?: string;
+  linkType?: "merchant" | "google_shopping" | "serpapi_product_api" | "unknown";
   isMock?: boolean;
   rankScore: number;
   rankReason: string;
@@ -111,8 +112,8 @@ export interface Candidate {
 
 export interface ComparisonRow {
   item: string;
+  price: string;
   bestFor: string;
-  strength: string;
   caution: string;
 }
 
@@ -134,6 +135,8 @@ export interface SearchDebug {
   serpDiscardReason: Record<string, number>;
   firstRawResultPreview?: unknown;
   fallbackReason?: string;
+  relevanceFilteredCount?: number;
+  relevanceFilteredReasons?: Record<string, number>;
 }
 
 export interface SearchRequest {

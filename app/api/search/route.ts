@@ -4,6 +4,7 @@ import { getSearchConfig } from "@/lib/search/config";
 import { generateGuidedOptions, NARROWING_OPENING } from "@/lib/search/guidedOptions";
 import { buildLocalMockCandidates } from "@/lib/search/mock";
 import { rankCandidates } from "@/lib/search/ranking";
+import { filterRelevantCandidates } from "@/lib/search/relevance";
 import { parseIntentAndSemanticContext } from "@/lib/search/semanticContext";
 import { postParseSafetyCheck, preSerpSafetyCheck, safetyCheck } from "@/lib/search/safety";
 import { searchSerpApi } from "@/lib/search/serp";
@@ -49,6 +50,7 @@ function fallbackNotice(reason: string): string {
   if (reason === "mapped_zero") return "已呼叫 SerpAPI，但目前沒有成功轉成可用商品結果，以下暫時顯示 Local Mock。";
   if (reason === "api_error") return "SerpAPI 呼叫發生錯誤，以下暫時顯示 Local Mock。";
   if (reason === "raw_zero") return "SerpAPI 目前沒有回傳商品結果，以下暫時顯示 Local Mock。";
+  if (reason === "relevance_filtered_zero") return "真實搜尋結果已排除不相關商品，以下暫時顯示 Local Mock。";
   return "以下暫時顯示 Local Mock 結果。";
 }
 
@@ -134,9 +136,16 @@ export async function POST(request: Request) {
         serpDiscardReason: serp.debug.serpDiscardReason,
         firstRawResultPreview: serp.debug.firstRawResultPreview
       };
-      candidates = serp.candidates;
+      const relevance = filterRelevantCandidates(serp.candidates, semanticContext, selectedOption);
+      candidates = relevance.candidates;
+      debug = {
+        ...debug,
+        relevanceFilteredCount: relevance.filteredCount,
+        relevanceFilteredReasons: relevance.filteredReasons
+      };
       if (serp.debug.serpRawCount === 0) fallbackReason = "raw_zero";
       if (serp.debug.serpRawCount > 0 && serp.debug.serpMappedCount === 0) fallbackReason = "mapped_zero";
+      if (serp.debug.serpMappedCount > 0 && relevance.candidates.length === 0) fallbackReason = "relevance_filtered_zero";
     } catch (error) {
       fallbackReason = "api_error";
       debug = {

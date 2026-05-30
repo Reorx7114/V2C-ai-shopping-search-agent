@@ -24,6 +24,7 @@ export function buildLocalMockCandidates(ctx: SemanticContext, option?: GuidedOp
     price: index % 2 === 0 ? "Mock price" : undefined,
     image: `https://placehold.co/420x320/f5f7fb/1c2430?text=${encodeURIComponent("Local Mock")}`,
     link: undefined,
+    linkType: "unknown",
     isMock: true,
     rankScore: 40 - index,
     rankReason: "本地 mock，僅用於流程展示"

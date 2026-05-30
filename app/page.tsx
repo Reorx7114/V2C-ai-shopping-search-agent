@@ -3,15 +3,14 @@
 import { useMemo, useState } from "react";
 import type { GuidedOption, SearchApiResponse } from "@/lib/search/types";
 
-const examples = [
-  "我想幫小朋友買玩具，小女生，不要機器人",
-  "我要買禮物給我妹妹，很久沒見了，他喜歡粉紅色的物品",
-  "我想要幫父親買個父親的禮物，但他個性很頑固，且嚴謹，我不知道買啥比較好",
-  "我想幫主管買生日禮物，但不要太商務"
-];
+function linkLabel(linkType?: string): string {
+  if (linkType === "google_shopping") return "查看 Google 商品頁";
+  if (linkType === "serpapi_product_api") return "查看商品資料";
+  return "查看商品頁";
+}
 
 export default function Home() {
-  const [query, setQuery] = useState(examples[0]);
+  const [query, setQuery] = useState("");
   const [response, setResponse] = useState<SearchApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [regenCount, setRegenCount] = useState(0);
@@ -78,26 +77,11 @@ export default function Home() {
           className="min-h-32 w-full resize-y rounded-lg border border-line bg-mist p-4 text-base leading-7 text-ink outline-none transition focus:border-moss focus:bg-white focus:ring-4 focus:ring-moss/10"
           placeholder="例如：我想幫主管買生日禮物，但不要太商務"
         />
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {examples.map((example) => (
-              <button
-                key={example}
-                type="button"
-                onClick={() => {
-                  setQuery(example);
-                  setStatus("");
-                }}
-                className="rounded-full border border-line bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-moss hover:text-moss"
-              >
-                案例
-              </button>
-            ))}
-          </div>
+        <div className="mt-4 flex justify-end">
           <button
             type="button"
             onClick={() => startNarrowing()}
-            disabled={loading}
+            disabled={loading || !query.trim()}
             className="rounded-lg bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "整理中..." : "幫我整理方向"}
@@ -166,10 +150,9 @@ export default function Home() {
                     </div>
                     <h3 className="line-clamp-3 min-h-16 text-sm font-semibold leading-5 text-ink">{candidate.title}</h3>
                     <p className="mt-3 text-sm text-slate-600">{candidate.price ?? "價格待確認"}</p>
-                    <p className="mt-2 text-xs leading-5 text-slate-500">{candidate.rankReason}</p>
                     {candidate.link ? (
                       <a href={candidate.link} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-lg border border-ink px-3 py-2 text-sm font-semibold text-ink transition hover:bg-ink hover:text-white">
-                        查看連結
+                        {linkLabel(candidate.linkType)}
                       </a>
                     ) : (
                       <span className="mt-4 inline-flex rounded-lg border border-line px-3 py-2 text-sm font-semibold text-slate-400">沒有連結</span>
@@ -188,17 +171,17 @@ export default function Home() {
                 <thead>
                   <tr className="border-b border-line text-slate-500">
                     <th className="py-3 pr-4">商品</th>
+                    <th className="py-3 pr-4">價格</th>
                     <th className="py-3 pr-4">適合情境</th>
-                    <th className="py-3 pr-4">優點</th>
-                    <th className="py-3 pr-4">確認點</th>
+                    <th className="py-3 pr-4">注意事項</th>
                   </tr>
                 </thead>
                 <tbody>
                   {response.comparisonTable.map((row) => (
                     <tr key={row.item} className="border-b border-line/70">
                       <td className="py-3 pr-4 font-medium text-ink">{row.item}</td>
+                      <td className="py-3 pr-4 text-slate-600">{row.price}</td>
                       <td className="py-3 pr-4 text-slate-600">{row.bestFor}</td>
-                      <td className="py-3 pr-4 text-slate-600">{row.strength}</td>
                       <td className="py-3 pr-4 text-slate-600">{row.caution}</td>
                     </tr>
                   ))}

@@ -25,6 +25,19 @@ function addReason(reasons: SerpDiscardReason, reason: string) {
   reasons[reason] = (reasons[reason] ?? 0) + 1;
 }
 
+function resolveLink(raw: SerpRawItem): Pick<Candidate, "link" | "linkType"> {
+  const directLink = asText(raw.link);
+  if (directLink) return { link: directLink, linkType: "merchant" };
+
+  const productLink = asText(raw.product_link);
+  if (productLink) return { link: productLink, linkType: "google_shopping" };
+
+  const serpApiProductApi = asText(raw.serpapi_product_api);
+  if (serpApiProductApi) return { link: serpApiProductApi, linkType: "serpapi_product_api" };
+
+  return { linkType: "unknown" };
+}
+
 export function mapSerpShoppingResults(rawItems: unknown[]): SerpMappedResult {
   const discard: SerpDiscardReason = {};
   const candidates: Candidate[] = [];
@@ -38,7 +51,7 @@ export function mapSerpShoppingResults(rawItems: unknown[]): SerpMappedResult {
     }
     const raw = item as SerpRawItem;
     const title = asText(raw.title);
-    const link = asText(raw.product_link) ?? asText(raw.link) ?? asText(raw.serpapi_product_api);
+    const { link, linkType } = resolveLink(raw);
     const image = asText(raw.thumbnail);
     const price = asText(raw.price) ?? asText(raw.extracted_price);
     const source = asText(raw.source) ?? "Google Shopping";
@@ -60,8 +73,9 @@ export function mapSerpShoppingResults(rawItems: unknown[]): SerpMappedResult {
       price,
       image,
       link,
+      linkType,
       rankScore: 0,
-      rankReason: "尚未排名"
+      rankReason: "需自行確認"
     });
   });
 
